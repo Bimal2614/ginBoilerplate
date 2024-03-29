@@ -1,22 +1,26 @@
-package main
+package endpoints
 
 import (
+	"github.com/bimal2614/ginBoilerplate/src/controllers"
 	"github.com/gin-gonic/gin"
 )
 
 func SetupUserRoutes(router *gin.RouterGroup) {
 
 	userRoutes := router.Group("/v1")
-	{
-		userRoutes.POST("/login", login)
-		userRoutes.POST("/register", register)
-		userRoutes.POST("send-otp", sendOTP)
-		userRoutes.POST("verify-otp", verifyOTP)
-		userRoutes.POST("forgot-password", forgotPassword)
-		userRoutes.POST("reset-password", resetPassword)
 
-		userRoutes.GET("/users", getUsers)
-		userRoutes.GET("/users/:id", getUser)
+	userController := controllers.NewUserController()
+	{
+		userRoutes.POST("/login", userController.Login)
+		userRoutes.POST("/register", userController.Register)
+		userRoutes.POST("/verify-otp", userController.VerifyOTP)
 	}
 
 }
+
+// userRoutes.POST("send-otp", sendOTP)
+// userRoutes.POST("forgot-password", forgotPassword)
+// userRoutes.POST("reset-password", resetPassword)
+
+// userRoutes.GET("/users", getUsers)
+// userRoutes.GET("/users/:id", getUser)

@@ -2,26 +2,72 @@ package utils
 
 import (
 	"fmt"
+	"math/rand"
 	"os"
+	"time"
 
 	"github.com/dgrijalva/jwt-go"
+	"golang.org/x/crypto/bcrypt"
 )
 
+// EncryptPassword encrypts a password
+func EncryptPassword(password string) string {
+	// Encrypt the password
+	hash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
+	if err != nil {
+		fmt.Println("Error encrypting password")
+		return ""
+	}
+
+	return string(hash)
+}
+
+// ComparePasswords compares a hashed password with a plaintext password
+func ComparePasswords(hashedPassword, password string) bool {
+	// Compare the passwords
+
+	err := bcrypt.CompareHashAndPassword([]byte(hashedPassword), []byte(password))
+	if err != nil {
+		fmt.Println("Error comparing passwords")
+		return false
+	}
+
+	return true
+}
+
 // GenerateToken generates a JWT token
-func GenerateToken(userID uint) (string, error) {
-	// Create a new token object
-	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
+func GenerateToken(userID uint, Email string) (string, string, error) {
+	// Create a new token object with ID and password
+	// The refresh token and Access token
+	// refresh token validation time 7 days
+	// access token validation time  3 hours
+
+	refreshTokenString := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
 		"userID": userID,
+		"Email":  Email,
+		"exp":    168 * 60 * 60,
+	})
+
+	accessTokenString := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
+		"userID": userID,
+		"Email":  Email,
+		"exp":    3 * 60 * 60,
 	})
 
 	// Sign the token with the secret
-	tokenString, err := token.SignedString([]byte(os.Getenv("SECRET")))
+	refreshToken, err := refreshTokenString.SignedString([]byte(os.Getenv("SECRET")))
 	if err != nil {
-		fmt.Println("Error generating JWT token")
-		return "", err
+		fmt.Println("Error signing refresh token")
+		return "", "", err
 	}
 
-	return tokenString, nil
+	accessToken, err := accessTokenString.SignedString([]byte(os.Getenv("SECRET")))
+	if err != nil {
+		fmt.Println("Error signing access token")
+		return "", "", err
+	}
+
+	return refreshToken, accessToken, nil
 }
 
 // ParseToken parses a JWT token
@@ -68,4 +114,21 @@ func VerifyToken(tokenString string) (bool, error) {
 	}
 
 	return true, nil
+}
+
+// func EncryptPassword
+// GenerateToken
+
+func GenerateOTP() string {
+
+	rand.Seed(time.Now().UnixNano())
+	min := 100000
+	max := 999999
+	return fmt.Sprintf("%v", rand.Intn(max-min+1)+min)
+}
+
+func SendOTP(email, otp string) error {
+	// Send the OTP to the user's email
+	fmt.Println("OTP: ", otp)
+	return nil
 }

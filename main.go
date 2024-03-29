@@ -27,6 +27,7 @@ func main() {
 	{
 		// Mount routes from all endpoints.go
 		endpoints.SetupUserRoutes(api)
+		endpoints.SetupWebsocketRoutes(router)
 	}
 
 	// Initialize the database connection

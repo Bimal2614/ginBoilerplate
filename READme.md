@@ -9,3 +9,6 @@
 - [ ] CSRF
 - [ ] SSo
 - [ ] 2 FA
+- [ ] Websocket
+- [ ] Reddis
+- [ ] Celery

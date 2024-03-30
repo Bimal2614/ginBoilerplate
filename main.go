@@ -1,7 +1,9 @@
 package main
 
 import (
-	"fmt"
+	"log"
+	"os"
+	"strconv"
 	"time"
 
 	"github.com/bimal2614/ginBoilerplate/database"
@@ -13,55 +15,76 @@ import (
 	"github.com/joho/godotenv"
 )
 
+// ResponseTimeMiddleware logs the time taken to respond to a request.
+// It captures the start time before a request is processed and the end time after processing,
+// then logs the latency along with the client IP, request method, and request path.
 func ResponseTimeMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		// Start timer
 		startTime := time.Now()
-
-		// Process request
 		c.Next()
-
-		// Calculate response time
-		endTime := time.Now()
-		latency := endTime.Sub(startTime)
-
-		// log the user IP, request method, status code, and latency
-		utils.ErrorLog.Printf("IP: %s - EndTime: [%v] %v %v %v\n", c.ClientIP(), endTime.Format("2006-01-02 15:04:05"), c.Request.Method, c.Request.URL.Path, latency)
-		// fmt.Printf("IP: %s - EndTime: [%v] %v %v %v\n", c.ClientIP(), endTime.Format("2006-01-02 15:04:05"), c.Request.Method, c.Request.URL.Path, latency)
+		latency := time.Since(startTime)
+		utils.ErrorLog.Printf("IP: %s - EndTime: [%v] %v %v %v\n", c.ClientIP(), time.Now().Format(time.RFC3339), c.Request.Method, c.Request.URL.Path, latency)
 	}
 }
 
 func main() {
-
-	// Load environment variables
+	// Load environment variables from a .env file.
 	if err := godotenv.Load(); err != nil {
-		fmt.Println("No .env file found")
+		log.Println("Warning: No .env file found. Default configurations will be used.")
 	}
 
-	rdb := redis.NewClient(&redis.Options{Addr: "localhost:6379", Password: "", DB: 0})
-	dispatcher, err := limiter.LimitDispatcher("24-M", 100, rdb)
-
+	// Initialize Redis client with environment variables or default values.
+	redisAddr := os.Getenv("REDIS_ADDR")
+	if redisAddr == "" {
+		redisAddr = "localhost:6379"
+	}
+	redisPassword := os.Getenv("REDIS_PASSWORD")
+	redisDB, err := strconv.Atoi(os.Getenv("REDIS_DB"))
 	if err != nil {
-		fmt.Println(err)
+		log.Fatalf("Failed to convert REDIS_DB to integer: %v", err)
 	}
-	// gin.SetMode(gin.ReleaseMode)
+
+	rdb := redis.NewClient(&redis.Options{
+		Addr:     redisAddr,
+		Password: redisPassword,
+		DB:       redisDB,
+	})
+
+	// Setup request rate limiter using Redis.
+	rateLimit := os.Getenv("RATE_LIMIT")
+	if rateLimit == "" {
+		rateLimit = "1-M" // Default rate limit
+	}
+	requestsPerMinute, err := strconv.Atoi(os.Getenv("REQUESTS_PER_MINUTE"))
+	if err != nil {
+		log.Fatalf("Failed to convert REQUESTS_PER_MINUTE to integer: %v", err)
+	}
+	dispatcher, err := limiter.LimitDispatcher(rateLimit, requestsPerMinute, rdb)
+	if err != nil {
+		log.Fatalf("Failed to setup rate limiter: %v", err)
+	}
 
 	router := gin.Default()
-
-	// Mount routes from different endpoint groups
 	router.Use(ResponseTimeMiddleware())
+
 	api := router.Group("/api")
 	{
-		// Mount routes from all endpoints.go
 		endpoints.SetupUserRoutes(api, dispatcher)
+		endpoints.SetupCronjobRouter(api, dispatcher)
 		endpoints.SetupWebsocketRoutes(router)
 	}
 
-	// Initialize the database connection
-	err_ := database.InitDB()
-	if err_ != nil {
-		panic(err_)
+	if err := database.InitDB(); err != nil {
+		log.Fatalf("Failed to initialize database: %v", err)
 	}
+
 	utils.Logger()
-	router.Run(":8080")
+
+	serverPort := os.Getenv("SERVER_PORT")
+	if serverPort == "" {
+		serverPort = ":8080" // Default port
+	}
+	if err := router.Run(serverPort); err != nil {
+		log.Fatalf("Failed to start server: %v", err)
+	}
 }

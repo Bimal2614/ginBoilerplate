@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"math/rand"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/dgrijalva/jwt-go"
@@ -131,4 +132,9 @@ func SendOTP(email, otp string) error {
 	// Send the OTP to the user's email
 	fmt.Println("OTP: ", otp)
 	return nil
+}
+
+func NormalizeEmail(email string) string {
+	// Normalize the email, convert to lowercase
+	return strings.ToLower(email)
 }

@@ -1,9 +1,9 @@
 package controllers
 
 import (
+	"fmt"
 	"net/http"
 	"regexp"
-	"fmt"
 
 	"github.com/gin-gonic/gin"
 
@@ -36,6 +36,7 @@ func (u *UserController) Login(c *gin.Context) {
 		return
 	}
 
+	user.Email = utils.NormalizeEmail(user.Email)
 	//  check is user exists
 	dbUser, err := crud.UserExistsByEmail(user.Email)
 	if err != nil {
@@ -45,7 +46,7 @@ func (u *UserController) Login(c *gin.Context) {
 	}
 
 	// check user verified or not
-	if !dbUser.IsVerified{
+	if !dbUser.IsVerified {
 		utils.ErrorLog.Println("Error:", "User not verified!", user.Email)
 		c.JSON(http.StatusBadRequest, gin.H{"error": "User not verified!"})
 		return
@@ -77,6 +78,9 @@ func (u *UserController) Register(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
+
+	// normalize the email
+	user.Email = utils.NormalizeEmail(user.Email)
 
 	// check for already existing user by email
 	_, err := crud.UserExistsByEmail(user.Email)
@@ -231,7 +235,6 @@ func (u *UserController) VerifyOTP(c *gin.Context) {
 
 	c.JSON(http.StatusOK, gin.H{"message": "OTP verified successfully"})
 }
-
 
 // func forgotPassword(c *gin.Context) {
 // 	// Get the JSON body and decode into variables

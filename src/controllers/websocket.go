@@ -10,7 +10,14 @@ var upgrader = websocket.Upgrader{
 	WriteBufferSize: 1024,
 }
 
-func Websocket(c *gin.Context) {
+type WebsocketController struct {
+}
+
+func NewWebsocketController() *WebsocketController {
+	return &WebsocketController{}
+}
+
+func (w *WebsocketController) Websocket(c *gin.Context) {
 	conn, err := upgrader.Upgrade(c.Writer, c.Request, nil)
 	if err != nil {
 		c.JSON(400, gin.H{"error": err.Error()})

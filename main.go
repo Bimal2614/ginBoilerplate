@@ -33,6 +33,13 @@ func main() {
 		log.Println("Warning: No .env file found. Default configurations will be used.")
 	}
 
+	err := utils.EnsureStaticFolder()
+	if err != nil {
+		utils.ErrorLog.Printf("Error creating static folder: %v\n", err)
+
+		return
+	}
+
 	// Initialize Redis client with environment variables or default values.
 	redisAddr := os.Getenv("REDIS_ADDR")
 	if redisAddr == "" {
@@ -66,6 +73,9 @@ func main() {
 
 	router := gin.Default()
 	router.Use(ResponseTimeMiddleware())
+
+	// Serve static files from the "static" directory
+	router.Static("/static", "./static")
 
 	api := router.Group("/api")
 	{

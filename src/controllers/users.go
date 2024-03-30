@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"regexp"
 	"fmt"
+	"time"
 
 	"github.com/gin-gonic/gin"
 
@@ -153,7 +154,7 @@ func (u *UserController) Register(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"data": userSchema})
 }
 
-func ReSendOTP(c *gin.Context) {
+func (u *UserController) ReSendOTP(c *gin.Context) {
 	// Get the JSON body and decode into variables
 	var user schemas.ReSendOTPInput
 	if err := c.ShouldBindJSON(&user); err != nil {
@@ -161,16 +162,12 @@ func ReSendOTP(c *gin.Context) {
 		return
 	}
 	// Check if the user exists in the database
-	_, err := crud.UserExistsByEmail(user.Email)
+	userDb, err := crud.UserExistsByEmail(user.Email)
 	if err != nil {
 		utils.ErrorLog.Println("Error:", "User not found!", user.Email)
 		c.JSON(http.StatusBadRequest, gin.H{"error": "User not found!"})
 		return
 	}
-	// if err := database.DB.Where("email = ?", user.Email).First(&user).Error; err != nil {
-	// 	c.JSON(http.StatusBadRequest, gin.H{"error": "Record not found!"})
-	// 	return
-	// }
 
 	// Generate an OTP
 	otp := utils.GenerateOTP()
@@ -179,6 +176,29 @@ func ReSendOTP(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Error sending OTP"})
 		return
 	}
+
+	emailOtp, _ := crud.OtpExistsByEmail(userDb.Email)
+	if emailOtp != nil {
+		// If OTP exists, update it
+		if err := crud.DeleteEmailOtp(emailOtp); err != nil {
+			utils.ErrorLog.Println("Error:", "Error updating OTP!", user.Email)
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Error updating OTP"})
+			return
+		}
+	} 
+	// If OTP doesn't exist, create a new one
+	newEmailOtp := models.EmailOtp{
+		Email:  userDb.Email,
+		OTP:    otp,
+		UserID: userDb.ID,
+	}
+
+	if err := crud.CreateEmailOtp(&newEmailOtp); err != nil {
+		utils.ErrorLog.Println("Error:", "Error creating OTP!", user.Email)
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Error creating OTP"})
+		return
+	}
+
 	c.JSON(http.StatusOK, gin.H{"message": "OTP sent successfully"})
 }
 
@@ -233,33 +253,67 @@ func (u *UserController) VerifyOTP(c *gin.Context) {
 }
 
 
-// func forgotPassword(c *gin.Context) {
-// 	// Get the JSON body and decode into variables
-// 	var user models.User
-// 	if err := c.ShouldBindJSON(&user); err != nil {
-// 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-// 		return
-// 	}
-// 	// Check if the user exists in the database
-// 	if err := database.DB.Where("email = ?", user.Email).First(&user).Error; err != nil {
-// 		c.JSON(http.StatusBadRequest, gin.H{"error": "Record not found!"})
-// 		return
-// 	}
-// 	// Generate a new password
-// 	newPassword := auth.GeneratePassword()
-// 	// Update the user's password
-// 	user.Password = newPassword
-// 	if err := crud.UpdateUser(&user); err != nil {
-// 		c.JSON(http.StatusBadRequest, gin.H{"error": "Error updating password"})
-// 		return
-// 	}
-// 	// Send the new password to the user's email
-// 	if err := auth.SendPassword(user.Email, newPassword); err != nil {
-// 		c.JSON(http.StatusBadRequest, gin.H{"error": "Error sending password"})
-// 		return
-// 	}
-// 	c.JSON(http.StatusOK, gin.H{"message": "Password reset successfully"})
-// }
+func (u *UserController) ForgotPassword(c *gin.Context) {
+	// Get the JSON body and decode into variables
+	var user schemas.ForgotPasswordInput
+	if err := c.ShouldBindJSON(&user); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	//  check is user exists
+	userDb, err := crud.UserExistsByEmail(user.Email)
+	if err != nil {
+		utils.ErrorLog.Println("Error:", "User not found!", user.Email)
+		c.JSON(http.StatusBadRequest, gin.H{"error": "User not found!"})
+		return
+	}
+
+	//  check is otp exists
+	emailOtp, _ := crud.OtpExistsByEmail(user.Email)
+	if emailOtp != nil{
+			validityPeriod := 5 * time.Minute 
+			currentTime := time.Now()
+			if !emailOtp.CreatedAt.Add(validityPeriod).Before(currentTime) {
+				// check for the length of the password and email structure
+				if len(user.Password) < 6 {
+					utils.ErrorLog.Println("Error:", "Password must be at least 6 characters long!", user.Email)
+					c.JSON(http.StatusBadRequest, gin.H{"error": "Password must be at least 6 characters long"})
+					return
+				}
+				// Generate a new password
+				passwordHash, err := utils.EncryptPassword(user.Password)
+				if err != nil {
+					utils.ErrorLog.Println("Error:", "Error encrypting password!", user.Email)
+					c.JSON(http.StatusBadRequest, gin.H{"error": "Error encrypting password"})
+					return
+				}
+				// Update the user's password
+				userDb.Password = passwordHash
+				if err := crud.UpdateUser(userDb); err != nil {
+					c.JSON(http.StatusBadRequest, gin.H{"error": "Error updating password"})
+					return
+				}
+			} else {
+				// OTP has expired
+				utils.ErrorLog.Println("Error:", "OTP has expired!", user.Email)
+				c.JSON(http.StatusBadRequest, gin.H{"error": "OTP has expired!"})
+				return
+			}
+		} else {
+			// OTP has expired
+			utils.ErrorLog.Println("Error:", "OTP not found!", user.Email)
+			c.JSON(http.StatusBadRequest, gin.H{"error": "OTP not found!"})
+			return
+		}
+		
+	// Send the new password to the user's email
+	// if err := auth.SendPassword(user.Email, newPassword); err != nil {
+	// 	c.JSON(http.StatusBadRequest, gin.H{"error": "Error sending password"})
+	// 	return
+	// }
+	c.JSON(http.StatusOK, gin.H{"message": "Password reset successfully"})
+}
 
 // func resetPassword(c *gin.Context) {
 // 	// Get the JSON body and decode into variables
@@ -299,3 +353,4 @@ func (u *UserController) VerifyOTP(c *gin.Context) {
 // 	}
 // 	c.JSON(http.StatusOK, gin.H{"data": user})
 // }
+// $2a$10$fF0TIY/VEDdynsBko3koze1YiNRoFiXKhXrb8733Pra6XHPiu8AWS

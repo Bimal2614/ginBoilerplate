@@ -1,5 +1,7 @@
 package models
 
+import "time"
+
 type EmailOtp struct {
 
 	// Primary key ID
@@ -12,6 +14,6 @@ type EmailOtp struct {
 	UserID uint `json:"user_id" gorm:"onDelete:CASCADE" gorm:"foreignKey:UserID"`
 
 	// CreatedAt and UpdatedAt fields
-	CreatedAt string `json:"created_at"`
-	UpdatedAt string `json:"updated_at"`
+	CreatedAt time.Time `json:"created_at" gorm:"autoCreateTime"`
+	UpdatedAt time.Time `json:"updated_at" gorm:"autoUpdateTime"`
 }

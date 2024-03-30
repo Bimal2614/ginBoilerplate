@@ -7,6 +7,7 @@ import (
 	"github.com/bimal2614/ginBoilerplate/database"
 	"github.com/bimal2614/ginBoilerplate/src/endpoints"
 	limiter "github.com/davidleitw/gin-limiter"
+	"github.com/bimal2614/ginBoilerplate/src/utils"
 	"github.com/gin-gonic/gin"
 	"github.com/go-redis/redis/v8"
 	"github.com/joho/godotenv"
@@ -25,6 +26,7 @@ func ResponseTimeMiddleware() gin.HandlerFunc {
 		latency := endTime.Sub(startTime)
 
 		// log the user IP, request method, status code, and latency
+		// utils.ErrorLog.Println("IP: %s - EndTime: [%v] %v %v %v\n", c.ClientIP(), endTime.Format("2006-01-02 15:04:05"), c.Request.Method, c.Request.URL.Path, latency)
 		fmt.Printf("IP: %s - EndTime: [%v] %v %v %v\n", c.ClientIP(), endTime.Format("2006-01-02 15:04:05"), c.Request.Method, c.Request.URL.Path, latency)
 	}
 }
@@ -60,6 +62,6 @@ func main() {
 	if err_ != nil {
 		panic(err_)
 	}
-
+	utils.Logger()
 	router.Run(":8080")
 }

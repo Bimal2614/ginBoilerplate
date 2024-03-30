@@ -19,3 +19,13 @@ func DeleteEmailOtp(emailOtp *models.EmailOtp) error {
 	}
 	return nil
 }
+
+
+func VerifyEmailOtp(email string, otp string) (*models.EmailOtp, error) {
+	var emailOtp models.EmailOtp
+	if err := database.DB.Where("email = ? AND otp = ?", email, otp).First(&emailOtp).Error; err != nil {
+		return nil, err
+	}
+	
+	return &emailOtp, nil
+}

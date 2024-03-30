@@ -41,8 +41,23 @@ func UpdateUser(user *models.User) error {
 
 // DeleteUser deletes a user record from the database by ID
 func DeleteUser(id int) error {
-	if err := database.DB.Delete(&models.User{}, id).Error; err != nil {
+	var user models.User
+	if err := database.DB.Delete(user, id).Error; err != nil {
 		return err
 	}
 	return nil
+}
+
+func UserExistsByEmail(email string) (*models.User, error) {
+	var user models.User
+	if err := database.DB.Where("email = ?", email).First(&user).Error; err != nil {
+		return nil, err
+	}
+	
+	return &user, nil
+}
+
+func CheckUserName(name string) error{
+	var user models.User
+	return database.DB.Where("username = ?", name).First(&user).Error
 }

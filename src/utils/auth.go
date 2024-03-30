@@ -11,15 +11,15 @@ import (
 )
 
 // EncryptPassword encrypts a password
-func EncryptPassword(password string) string {
+func EncryptPassword(password string) (string, error) {
 	// Encrypt the password
 	hash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
 	if err != nil {
 		fmt.Println("Error encrypting password")
-		return ""
+		return "", err
 	}
 
-	return string(hash)
+	return string(hash), nil
 }
 
 // ComparePasswords compares a hashed password with a plaintext password

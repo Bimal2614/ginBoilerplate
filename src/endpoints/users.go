@@ -44,6 +44,8 @@ func SetupUserRoutes(router *gin.RouterGroup, dispatcher *limiter.Dispatcher) {
 	userRoutes.POST("/login", dispatcher.MiddleWare(loginRateLimitPeriod, loginRateLimitRequests), userController.Login)
 	userRoutes.POST("/register", dispatcher.MiddleWare(registerRateLimitPeriod, registerRateLimitRequests), userController.Register)
 	userRoutes.POST("/verify-otp", userController.VerifyOTP)
+	userRoutes.POST("/resend-otp", userController.ReSendOTP)
+	userRoutes.POST("/forgot-password", userController.ForgotPassword)
 
 	// Additional routes can be added here in a similar manner
 	// userRoutes.POST("/send-otp", sendOTP)

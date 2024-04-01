@@ -5,7 +5,6 @@ import (
 	"math/rand"
 	"os"
 	"strings"
-	"time"
 
 	"github.com/dgrijalva/jwt-go"
 	"golang.org/x/crypto/bcrypt"
@@ -122,7 +121,7 @@ func VerifyToken(tokenString string) (bool, error) {
 
 func GenerateOTP() string {
 
-	rand.Seed(time.Now().UnixNano())
+	// rand.Seed(time.Now().UnixNano())
 	min := 100000
 	max := 999999
 	return fmt.Sprintf("%v", rand.Intn(max-min+1)+min)

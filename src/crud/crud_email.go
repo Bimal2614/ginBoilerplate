@@ -13,6 +13,13 @@ func CreateEmailOtp(emailOtp *models.EmailOtp) error {
 	return nil
 }
 
+func UpdateEmailOtp(emailOtp *models.EmailOtp) error {
+	if err := database.DB.Save(emailOtp).Error; err != nil {
+		return err
+	}
+	return nil
+}
+
 func DeleteEmailOtp(emailOtp *models.EmailOtp) error {
 	if err := database.DB.Delete(emailOtp).Error; err != nil {
 		return err
@@ -29,3 +36,13 @@ func VerifyEmailOtp(email string, otp string) (*models.EmailOtp, error) {
 	
 	return &emailOtp, nil
 }
+
+func OtpExistsByEmail(email string) (*models.EmailOtp, error) {
+	var emailOtp models.EmailOtp
+	if err := database.DB.Where("email = ?", email).First(&emailOtp).Error; err != nil {
+		return nil, err
+	}
+	
+	return &emailOtp, nil
+}
+

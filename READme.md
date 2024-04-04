@@ -51,7 +51,7 @@ Follow these steps to get started with the Go Gin framework boilerplate:
 - [ ] Cors
 - [ ] CSRF
 - [ ] SSo
-- [ ] 2 FA
+- [✔] 2 FA
 - [✔] Websocket
 - [✔] Reddis
 - [ ] Celery

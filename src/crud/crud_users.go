@@ -14,7 +14,7 @@ func CreateUser(user *models.User) error {
 }
 
 // GetUser fetches a user record from the database by ID
-func GetUser(id int) (*models.User, error) {
+func GetUser(id uint) (*models.User, error) {
 	var user models.User
 	if err := database.DB.First(&user, id).Error; err != nil {
 		return nil, err

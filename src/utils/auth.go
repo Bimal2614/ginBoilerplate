@@ -5,15 +5,23 @@ import (
 	"math/rand"
 	"os"
 	"strings"
-
+	"time"
+	"github.com/bimal2614/ginBoilerplate/src/crud"
+	"github.com/bimal2614/ginBoilerplate/src/models"
 	"github.com/dgrijalva/jwt-go"
 	"golang.org/x/crypto/bcrypt"
 )
 
+// Secret key
+var secretKey = []byte(os.Getenv("SECRET_KEY"))
+
 // EncryptPassword encrypts a password
 func EncryptPassword(password string) (string, error) {
+	// Combine password and secret key
+	passwordWithPepper := append([]byte(password), secretKey...)
+
 	// Encrypt the password
-	hash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
+	hash, err := bcrypt.GenerateFromPassword(passwordWithPepper, bcrypt.DefaultCost)
 	if err != nil {
 		fmt.Println("Error encrypting password")
 		return "", err
@@ -25,8 +33,7 @@ func EncryptPassword(password string) (string, error) {
 // ComparePasswords compares a hashed password with a plaintext password
 func ComparePasswords(hashedPassword, password string) bool {
 	// Compare the passwords
-
-	err := bcrypt.CompareHashAndPassword([]byte(hashedPassword), []byte(password))
+	err := bcrypt.CompareHashAndPassword([]byte(hashedPassword), []byte(password+string(secretKey)))
 	if err != nil {
 		fmt.Println("Error comparing passwords")
 		return false
@@ -37,31 +44,31 @@ func ComparePasswords(hashedPassword, password string) bool {
 
 // GenerateToken generates a JWT token
 func GenerateToken(userID uint, Email string) (string, string, error) {
-	// Create a new token object with ID and password
+	// Create a new token object with ID and Email
 	// The refresh token and Access token
 	// refresh token validation time 7 days
-	// access token validation time  3 hours
+	// access token validation time  24 hours
 
 	refreshTokenString := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
 		"userID": userID,
 		"Email":  Email,
-		"exp":    168 * 60 * 60,
+		"exp":    time.Now().Add(7 * 24 * time.Hour).Unix(),
 	})
 
 	accessTokenString := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
 		"userID": userID,
 		"Email":  Email,
-		"exp":    3 * 60 * 60,
+		"exp":    time.Now().Add(24 * time.Hour).Unix(),
 	})
 
 	// Sign the token with the secret
-	refreshToken, err := refreshTokenString.SignedString([]byte(os.Getenv("SECRET")))
+	refreshToken, err := refreshTokenString.SignedString(secretKey)
 	if err != nil {
 		fmt.Println("Error signing refresh token")
 		return "", "", err
 	}
 
-	accessToken, err := accessTokenString.SignedString([]byte(os.Getenv("SECRET")))
+	accessToken, err := accessTokenString.SignedString(secretKey)
 	if err != nil {
 		fmt.Println("Error signing access token")
 		return "", "", err
@@ -70,54 +77,48 @@ func GenerateToken(userID uint, Email string) (string, string, error) {
 	return refreshToken, accessToken, nil
 }
 
-// ParseToken parses a JWT token
-func ParseToken(tokenString string) (jwt.MapClaims, error) {
-	// Parse the token
+
+func GetCurrentUser(tokenString string) (*models.User, error) {
+	if tokenString == "" {
+		return nil, fmt.Errorf("authorization header missing")
+	}
+
+	parts := strings.Split(tokenString, " ")
+	if len(parts) != 2 || parts[0] != "Bearer" {
+		return nil, fmt.Errorf("invalid token format")
+	}
+	tokenString = parts[1]
+
 	token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
-		return []byte(os.Getenv("SECRET")), nil
+		return secretKey, nil
 	})
 	if err != nil {
-		fmt.Println("Error parsing JWT token")
 		return nil, err
 	}
 
-	// Extract the claims
 	claims, ok := token.Claims.(jwt.MapClaims)
+	id, ok:= claims["userID"].(float64)
 	if !ok {
-		fmt.Println("Error extracting claims")
-		return nil, err
+		return nil, fmt.Errorf("user ID not found in token")
 	}
 
-	return claims, nil
+	user, err := crud.GetUser(uint(id))
+	if err != nil || user.IsDeleted {
+		return nil, fmt.Errorf("User not found")
+	}
+	if !user.IsVerified {
+		return nil, fmt.Errorf("User not verified")
+	}
+
+	return user, nil
 }
+
 
 // ExtractToken extracts the token from the Authorization header
 func ExtractToken(authorizationHeader string) string {
 	// Extract the token
 	return authorizationHeader
 }
-
-// VerifyToken verifies a JWT token
-func VerifyToken(tokenString string) (bool, error) {
-	// Parse the token
-	claims, err := ParseToken(tokenString)
-	if err != nil {
-		fmt.Println("Error parsing JWT token")
-		return false, err
-	}
-
-	// Validate the token
-	_, ok := claims["userID"]
-	if !ok {
-		fmt.Println("Error validating JWT token")
-		return false, err
-	}
-
-	return true, nil
-}
-
-// func EncryptPassword
-// GenerateToken
 
 func GenerateOTP() string {
 
@@ -137,3 +138,4 @@ func NormalizeEmail(email string) string {
 	// Normalize the email, convert to lowercase
 	return strings.ToLower(email)
 }
+

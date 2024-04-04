@@ -5,10 +5,13 @@ import "time"
 // Crete a user model with email, password, username, created_at, updated_at, is_active, is_verified, and is_deleted fields
 
 type User struct {
-	ID       uint   `gorm:"primaryKey" json:"id"`
-	Email    string `gorm:"unique" json:"email"`
-	Password string `json:"password"`
-	Username string `gorm:"unique" json:"username"`
+	ID         uint   `gorm:"primaryKey" json:"id"`
+	Email      string `gorm:"unique" json:"email"`
+	Password   string `json:"password"`
+	Username   string `gorm:"unique" json:"username"`
+	SecretKey  string `json:"secret_key"`
+	RecoverKey string `json:"recover_key"`
+	Auth2FA    bool   `json:"auth_2fa" gorm:"default:false"`
 
 	CreatedAt time.Time `json:"created_at" gorm:"autoCreateTime"`
 	UpdatedAt time.Time `json:"updated_at" gorm:"autoUpdateTime"`

@@ -24,9 +24,8 @@ func SetupUserRoutes(router *gin.RouterGroup, dispatcher *limiter.Dispatcher) {
 	if loginRateLimitPeriod == "" {
 		loginRateLimitPeriod = "1-h" // Default rate limit period for login
 	}
-	loginRateLimitRequestsStr := os.Getenv("LOGIN_RATE_LIMIT_REQUESTS")
-	loginRateLimitRequests, err := strconv.Atoi(loginRateLimitRequestsStr)
-	if err != nil {
+	loginRateLimitRequests, _ := strconv.Atoi(os.Getenv("LOGIN_RATE_LIMIT_REQUESTS"))
+	if loginRateLimitRequests == 0 {
 		loginRateLimitRequests = 20 // Default rate limit requests for login
 	}
 
@@ -34,9 +33,8 @@ func SetupUserRoutes(router *gin.RouterGroup, dispatcher *limiter.Dispatcher) {
 	if registerRateLimitPeriod == "" {
 		registerRateLimitPeriod = "1-h" // Default rate limit period for register
 	}
-	registerRateLimitRequestsStr := os.Getenv("REGISTER_RATE_LIMIT_REQUESTS")
-	registerRateLimitRequests, err := strconv.Atoi(registerRateLimitRequestsStr)
-	if err != nil {
+	registerRateLimitRequests, _ := strconv.Atoi(os.Getenv("REGISTER_RATE_LIMIT_REQUESTS"))
+	if registerRateLimitRequests == 0 {
 		registerRateLimitRequests = 20 // Default rate limit requests for register
 	}
 
@@ -46,12 +44,11 @@ func SetupUserRoutes(router *gin.RouterGroup, dispatcher *limiter.Dispatcher) {
 	userRoutes.POST("/verify-otp", userController.VerifyOTP)
 	userRoutes.POST("/resend-otp", userController.ReSendOTP)
 	userRoutes.POST("/forgot-password", userController.ForgotPassword)
-
-	// Additional routes can be added here in a similar manner
-	// userRoutes.POST("/send-otp", sendOTP)
-	// userRoutes.POST("/forgot-password", forgotPassword)
-	// userRoutes.POST("/reset-password", resetPassword)
-
-	// userRoutes.GET("/users", getUsers)
-	// userRoutes.GET("/users/:id", getUser)
+	userRoutes.POST("/change-password", userController.ChangePassword)
+	userRoutes.GET("/get-all-users", userController.GetUsers)
+	userRoutes.GET("/profile", userController.Profile)
+	userRoutes.GET("/get-2FA-detail", userController.Get2FADetails)
+	userRoutes.POST("/verify-2FA-otp", userController.Verify2FAOTP)
+	userRoutes.POST("/manage-2FA", userController.Manage2FA)
+	userRoutes.POST("/verify-recover-key", userController.VerifyRecoverKey)
 }

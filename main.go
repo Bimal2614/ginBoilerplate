@@ -62,10 +62,12 @@ func main() {
 	if rateLimit == "" {
 		rateLimit = "1-M" // Default rate limit
 	}
-	requestsPerMinute, err := strconv.Atoi(os.Getenv("REQUESTS_PER_MINUTE"))
-	if err != nil {
-		log.Fatalf("Failed to convert REQUESTS_PER_MINUTE to integer: %v", err)
+	// requestsPerMinute, err := strconv.Atoi(os.Getenv("REQUESTS_PER_MINUTE"))
+	requestsPerMinute, _ := strconv.Atoi(os.Getenv("REQUESTS_PER_MINUTE"))
+	if requestsPerMinute == 0 {
+		requestsPerMinute = 10
 	}
+
 	dispatcher, err := limiter.LimitDispatcher(rateLimit, requestsPerMinute, rdb)
 	if err != nil {
 		log.Fatalf("Failed to setup rate limiter: %v", err)

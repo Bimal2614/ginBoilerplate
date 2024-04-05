@@ -7,6 +7,7 @@ import (
 	"image/png"
 	"net/http"
 	"regexp"
+	"strconv"
 	"time"
 
 	"github.com/bimal2614/ginBoilerplate/src/crud"
@@ -48,7 +49,14 @@ func (u *UserController) Login(c *gin.Context) {
 
 	// check user verified or not
 	if !dbUser.IsVerified {
-		c.JSON(http.StatusOK, gin.H{"id": dbUser.ID, "email": dbUser.Email, "is_verified": dbUser.IsVerified})
+		c.JSON(http.StatusOK, gin.H{
+			"message": "User not verify",
+			"data": gin.H{
+				"id":          dbUser.ID,
+				"email":       dbUser.Email,
+				"is_verified": dbUser.IsVerified,
+			},
+		})
 		return
 	}
 
@@ -71,8 +79,15 @@ func (u *UserController) Login(c *gin.Context) {
 		})
 		return
 	}
+
+	dbUser.Verifier = utils.GenerateRandomKey(16)
+	if err := crud.UpdateUser(dbUser); err != nil {
+		utils.ErrorLog.Println("Error:", "Error updating recover key!", dbUser.Email)
+		c.JSON(http.StatusBadRequest, gin.H{"message": "updating recover key"})
+		return
+	}
 	// Generate a JWT token
-	refreshtoken, accesstoken, err := utils.GenerateToken(dbUser.ID, user.Email)
+	refreshtoken, accesstoken, err := utils.GenerateToken(dbUser.ID, dbUser.Email, dbUser.Verifier)
 	if err != nil {
 		utils.ErrorLog.Println("Error:", "Error generating JWT token!", user.Email)
 		c.JSON(http.StatusBadRequest, gin.H{"message": "Error generating JWT token"})
@@ -89,6 +104,25 @@ func (u *UserController) Login(c *gin.Context) {
 			"accessToken":  accesstoken,
 		},
 	})
+}
+
+func (u *UserController) LogOut(c *gin.Context) {
+	token := c.GetHeader("Authorization")
+	userDb, err := utils.GetCurrentUser(token)
+	if err != nil {
+		utils.ErrorLog.Println("Error:", err.Error())
+		c.JSON(http.StatusUnauthorized, gin.H{"message": err.Error()})
+		return
+	}
+
+	userDb.Verifier = utils.GenerateRandomKey(16)
+	if err := crud.UpdateUser(userDb); err != nil {
+		utils.ErrorLog.Println("Error:", "Error updating recover key!", userDb.Email)
+		c.JSON(http.StatusBadRequest, gin.H{"message": "error updating verifier key"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "User logged out successfully"})
 }
 
 func (u *UserController) Register(c *gin.Context) {
@@ -149,9 +183,9 @@ func (u *UserController) Register(c *gin.Context) {
 		return
 	}
 
-	otp := utils.GenerateOTP()
+	// otp := utils.GenerateOTP()
 	// Send the OTP to the user's email
-	if err := utils.SendOTP(user.Email, otp); err != nil {
+	if err := utils.SendOTP(user.Email, 123456, "dhfgsjhrgfherghg"); err != nil {
 		utils.ErrorLog.Println("Error:", "Error sending OTP!", user.Email)
 		c.JSON(http.StatusBadRequest, gin.H{"message": "Error sending OTP"})
 		return
@@ -160,7 +194,7 @@ func (u *UserController) Register(c *gin.Context) {
 	// save the otp in the database
 	emailOtp := models.EmailOtp{
 		Email:  user.Email,
-		OTP:    otp,
+		OTP:    uint(123456), //add otp
 		UserID: user.ID,
 	}
 	if err := crud.CreateEmailOtp(&emailOtp); err != nil {
@@ -178,7 +212,7 @@ func (u *UserController) Register(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"data": userSchema})
 }
 
-func (u *UserController) ReSendOTP(c *gin.Context) {
+func (u *UserController) SendOTP(c *gin.Context) {
 	// Get the JSON body and decode into variables
 	var user schemas.ReSendOTPInput
 	if err := c.ShouldBindJSON(&user); err != nil {
@@ -194,9 +228,9 @@ func (u *UserController) ReSendOTP(c *gin.Context) {
 	}
 
 	// Generate an OTP
-	otp := utils.GenerateOTP()
+	// otp := utils.GenerateOTP()
 	// Send the OTP to the user's email
-	if err := utils.SendOTP(user.Email, otp); err != nil {
+	if err := utils.SendOTP("dumy3154@gmail.com", 123456, "sdhfgjhdgjhjh"); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"message": "Error sending OTP"})
 		return
 	}
@@ -213,7 +247,7 @@ func (u *UserController) ReSendOTP(c *gin.Context) {
 	// If OTP doesn't exist, create a new one
 	newEmailOtp := models.EmailOtp{
 		Email:  userDb.Email,
-		OTP:    otp,
+		OTP:    uint(123456), //add otp
 		UserID: userDb.ID,
 	}
 
@@ -236,7 +270,7 @@ func (u *UserController) VerifyOTP(c *gin.Context) {
 	}
 
 	// Check if the user exists in the database
-	user, err := crud.UserExistsByEmail(request_data.Email)
+	userDb, err := crud.UserExistsByEmail(request_data.Email)
 	if err != nil {
 		utils.ErrorLog.Println("Error:", "Record not found!", request_data.Email)
 		c.JSON(http.StatusNotFound, gin.H{"message": "Record not found!"})
@@ -244,36 +278,53 @@ func (u *UserController) VerifyOTP(c *gin.Context) {
 	}
 
 	//  check if the user is already verified
-	if user.IsVerified {
-		utils.ErrorLog.Println("Error:", "User already verified!", user.Email)
+	if userDb.IsVerified {
+		utils.ErrorLog.Println("Error:", "User already verified!", userDb.Email)
 		c.JSON(http.StatusBadRequest, gin.H{"message": "User already verified!"})
 		return
 	}
 
-	// Check if the OTP exists in the database
-	emailOtp, err := crud.VerifyEmailOtp(request_data.Email, request_data.OTP)
-	if err != nil {
-		utils.ErrorLog.Println("Error:", "OTP not found!", request_data.Email)
+	//  check is otp exists
+	emailOtp, _ := crud.OtpExistsByEmail(request_data.Email)
+	if emailOtp != nil {
+		//check is otp right or wrong
+		if emailOtp.OTP != request_data.OTP {
+			utils.ErrorLog.Println("Error:", "OTP mismatched, Please provide correct OTP!", userDb.Email)
+			c.JSON(http.StatusBadRequest, gin.H{"message": "OTP mismatched, Please provide correct OTP"})
+			return
+		}
+		validityPeriod := 5 * time.Minute
+		currentTime := time.Now()
+		//check otp time
+		if !emailOtp.CreatedAt.Add(validityPeriod).Before(currentTime) {
+			// Update the user's password
+			userDb.IsVerified = true
+			if err := crud.UpdateUser(userDb); err != nil {
+				utils.ErrorLog.Println("Error:", "Error updating password!", userDb.Email)
+				c.JSON(http.StatusBadRequest, gin.H{"message": "Error updating password"})
+				return
+			}
+
+			// Delete the OTP from the database
+			if err := crud.DeleteEmailOtp(emailOtp); err != nil {
+				utils.ErrorLog.Println("Error:", "Error deleting OTP!", userDb.Email)
+				c.JSON(http.StatusBadRequest, gin.H{"message": "Error deleting OTP"})
+				return
+			}
+		} else {
+			// OTP has expired
+			utils.ErrorLog.Println("Error:", "OTP has expired!", userDb.Email)
+			c.JSON(http.StatusBadRequest, gin.H{"message": "OTP has expired!"})
+			return
+		}
+	} else {
+		// User OTP not add in database
+		utils.ErrorLog.Println("Error:", "OTP not found!", userDb.Email)
 		c.JSON(http.StatusNotFound, gin.H{"message": "OTP not found!"})
 		return
 	}
 
-	// change the status of the user to verified
-	user.IsVerified = true
-	if err := crud.UpdateUser(user); err != nil {
-		utils.ErrorLog.Println("Error:", "Error updating user!", user.Email)
-		c.JSON(http.StatusBadRequest, gin.H{"message": "Error updating user"})
-		return
-	}
-
-	// Delete the OTP from the database
-	if err := crud.DeleteEmailOtp(emailOtp); err != nil {
-		utils.ErrorLog.Println("Error:", "Error deleting OTP!", user.Email)
-		c.JSON(http.StatusBadRequest, gin.H{"message": "Error deleting OTP"})
-		return
-	}
-
-	c.JSON(http.StatusOK, gin.H{"message": "OTP verified successfully"})
+	c.JSON(http.StatusOK, gin.H{"message": "User verified successfully"})
 }
 
 func (u *UserController) ForgotPassword(c *gin.Context) {
@@ -307,13 +358,13 @@ func (u *UserController) ForgotPassword(c *gin.Context) {
 		//check otp time
 		if !emailOtp.CreatedAt.Add(validityPeriod).Before(currentTime) {
 			// check for the length of the password and email structure
-			if len(user.Password) < 6 {
+			if len(user.NewPassword) < 6 {
 				utils.ErrorLog.Println("Error:", "Password must be at least 6 characters long!", user.Email)
 				c.JSON(http.StatusBadRequest, gin.H{"message": "Password must be at least 6 characters long"})
 				return
 			}
 			// Generate a new password
-			passwordHash, err := utils.EncryptPassword(user.Password)
+			passwordHash, err := utils.EncryptPassword(user.NewPassword)
 			if err != nil {
 				utils.ErrorLog.Println("Error:", "Error encrypting password!", user.Email)
 				c.JSON(http.StatusBadRequest, gin.H{"message": "Error encrypting password"})
@@ -350,6 +401,13 @@ func (u *UserController) ForgotPassword(c *gin.Context) {
 }
 
 func (u *UserController) ChangePassword(c *gin.Context) {
+	token := c.GetHeader("Authorization")
+	dbUser, err := utils.GetCurrentUser(token)
+	if err != nil {
+		utils.ErrorLog.Println("Error:", err.Error())
+		c.JSON(http.StatusUnauthorized, gin.H{"message": err.Error()})
+		return
+	}
 	//Get the JSON body and decode into variables
 	var user schemas.ChangePasswordInput
 	if err := c.ShouldBindJSON(&user); err != nil {
@@ -358,39 +416,24 @@ func (u *UserController) ChangePassword(c *gin.Context) {
 		return
 	}
 
-	//  check is user exists
-	dbUser, err := crud.UserExistsByEmail(user.Email)
-	if err != nil {
-		utils.ErrorLog.Println("Error:", "User not found!", user.Email)
-		c.JSON(http.StatusNotFound, gin.H{"message": "User not found!"})
-		return
-	}
-
-	// check user verified or not
-	if !dbUser.IsVerified {
-		utils.ErrorLog.Println("Error:", "User not verified!", user.Email)
-		c.JSON(http.StatusBadRequest, gin.H{"message": "User not verified!"})
+	//check old password in db
+	comp := utils.ComparePasswords(dbUser.Password, user.OldPassword)
+	if !comp {
+		utils.ErrorLog.Println("Error:", "Old password is incorrect!", dbUser.Email)
+		c.JSON(http.StatusBadRequest, gin.H{"message": "Old password is incorrect"})
 		return
 	}
 
 	//ckeck add user old password and new password
 	if user.OldPassword == user.NewPassword {
-		utils.ErrorLog.Println("Error:", "Old password and new password are the same!", user.Email)
+		utils.ErrorLog.Println("Error:", "Old password and new password are the same!", dbUser.Email)
 		c.JSON(http.StatusBadRequest, gin.H{"message": "Old password and new password are the same!"})
-		return
-	}
-
-	//check old password in db
-	comp := utils.ComparePasswords(dbUser.Password, user.OldPassword)
-	if !comp {
-		utils.ErrorLog.Println("Error:", "Old password is incorrect!", user.Email)
-		c.JSON(http.StatusBadRequest, gin.H{"message": "Old password is incorrect"})
 		return
 	}
 
 	// check for the length of the password
 	if len(user.NewPassword) < 6 {
-		utils.ErrorLog.Println("Error:", "Password must be at least 6 characters long!", user.Email)
+		utils.ErrorLog.Println("Error:", "Password must be at least 6 characters long!", dbUser.Email)
 		c.JSON(http.StatusBadRequest, gin.H{"message": "Password must be at least 6 characters long"})
 		return
 	}
@@ -398,14 +441,14 @@ func (u *UserController) ChangePassword(c *gin.Context) {
 	// encrypt the new password
 	passwordHash, err := utils.EncryptPassword(user.NewPassword)
 	if err != nil {
-		utils.ErrorLog.Println("Error:", "encrypting password!", user.Email)
+		utils.ErrorLog.Println("Error:", "encrypting password!", dbUser.Email)
 		c.JSON(http.StatusBadRequest, gin.H{"message": "Error encrypting password"})
 		return
 	}
 	// Update the user's password
 	dbUser.Password = passwordHash
 	if err := crud.UpdateUser(dbUser); err != nil {
-		utils.ErrorLog.Println("Error:", "updating password!", user.Email)
+		utils.ErrorLog.Println("Error:", "updating password!", dbUser.Email)
 		c.JSON(http.StatusBadRequest, gin.H{"message": "Error updating password"})
 		return
 	}
@@ -413,7 +456,21 @@ func (u *UserController) ChangePassword(c *gin.Context) {
 }
 
 func (u *UserController) GetUsers(c *gin.Context) {
-	users, err := crud.GetUsers()
+	// Parse query parameters for pagination
+	page, err := strconv.Atoi(c.DefaultQuery("page", "1"))
+	if err != nil || page < 1 {
+		page = 1
+	}
+
+	limit, err := strconv.Atoi(c.DefaultQuery("limit", "10"))
+	if err != nil || limit < 1 {
+		limit = 10
+	}
+
+	// Calculate offset
+	offset := (page - 1) * limit
+
+	users, count, err := crud.GetUsers(offset, limit)
 	if err != nil {
 		utils.ErrorLog.Println("Error:", "Error fetching users!")
 		c.JSON(http.StatusBadRequest, gin.H{"message": "Error fetching users"})
@@ -433,7 +490,7 @@ func (u *UserController) GetUsers(c *gin.Context) {
 			IsDeleted:  user.IsDeleted,
 		})
 	}
-	c.JSON(http.StatusOK, gin.H{"data": userResponses})
+	c.JSON(http.StatusOK, gin.H{"data": userResponses, "count": count})
 }
 
 // func (u *UserController) Profile(c *gin.Context) {
@@ -456,7 +513,7 @@ func (u *UserController) Profile(c *gin.Context) {
 	user, err := utils.GetCurrentUser(token)
 	if err != nil {
 		utils.ErrorLog.Println("Error:", err.Error())
-		c.JSON(http.StatusBadRequest, gin.H{"message": err.Error()})
+		c.JSON(http.StatusUnauthorized, gin.H{"message": err.Error()})
 		return
 	}
 	userResponse := schemas.UserResponse{
@@ -572,7 +629,7 @@ func (u *UserController) Verify2FAOTP(c *gin.Context) {
 		}
 
 		if authData.InsideFlag {
-			refreshtoken, accesstoken, err := utils.GenerateToken(userDb.ID, userDb.Email)
+			refreshtoken, accesstoken, err := utils.GenerateToken(userDb.ID, userDb.Email, userDb.Verifier)
 			if err != nil {
 				utils.ErrorLog.Println("Error:", "Error generating JWT token!", userDb.Email)
 				c.JSON(http.StatusBadRequest, gin.H{"message": "Error generating JWT token"})

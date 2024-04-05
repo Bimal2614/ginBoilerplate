@@ -10,6 +10,7 @@ import (
 	"github.com/bimal2614/ginBoilerplate/src/endpoints"
 	"github.com/bimal2614/ginBoilerplate/src/utils"
 	limiter "github.com/davidleitw/gin-limiter"
+	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 	"github.com/go-redis/redis/v8"
 	"github.com/joho/godotenv"
@@ -68,6 +69,7 @@ func main() {
 
 	router := gin.Default()
 	router.Use(ResponseTimeMiddleware())
+	router.Use(cors.Default())
 
 	api := router.Group("/api")
 	{
@@ -79,6 +81,7 @@ func main() {
 	if err := database.InitDB(); err != nil {
 		log.Fatalf("Failed to initialize database: %v", err)
 	}
+	// database.Migrate()
 
 	utils.Logger()
 

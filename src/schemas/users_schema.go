@@ -5,14 +5,14 @@ import (
 )
 
 type UserRegisterOutput struct {
-	ID       uint   `json:"id"`
+	ID       string `json:"id"`
 	Email    string `json:"email"`
 	Username string `json:"username"`
 }
 
 type VerifyOTPInput struct {
 	Email string `json:"email" binding:"required"`
-	OTP   string `json:"otp" binding:"required"`
+	OTP   uint   `json:"otp" binding:"required"`
 }
 
 type ReSendOTPInput struct {
@@ -20,13 +20,12 @@ type ReSendOTPInput struct {
 }
 
 type ForgotPasswordInput struct {
-	Password string `json:"password" binding:"required"`
-	Email    string `json:"email" binding:"required"`
-	OTP      string `json:"otp" binding:"required"`
+	NewPassword string `json:"newpassword" binding:"required"`
+	Email       string `json:"email" binding:"required"`
+	OTP         uint   `json:"otp" binding:"required"`
 }
 
 type ChangePasswordInput struct {
-	Email       string `json:"email" binding:"required"`
 	OldPassword string `json:"oldpassword" binding:"required"`
 	NewPassword string `json:"newpassword" binding:"required"`
 }
@@ -36,7 +35,7 @@ type GoogleLoginInput struct {
 }
 
 type UserResponse struct {
-	ID         uint      `json:"id"`
+	ID         string    `json:"id"`
 	Email      string    `json:"email"`
 	Username   string    `json:"username"`
 	CreatedAt  time.Time `json:"created_at"`
@@ -48,10 +47,10 @@ type UserResponse struct {
 }
 
 type AuthVerifyInput struct {
-	UserID     uint   `json:"user_id"`
+	UserID     string `json:"user_id"`
 	SecretKey  string `json:"secret_key"`
 	RecoverKey string `json:"recover_key"`
-	Auth2FA    bool   `json:"auth_2fa"`
+	Auth2FA    bool   `json:"auth2_fa"`
 	InsideFlag bool   `json:"inside_flage"`
 	Enable2FA  bool   `json:"enable_2fa"`
 	OTP        string `json:"otp"`

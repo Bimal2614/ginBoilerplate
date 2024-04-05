@@ -14,21 +14,29 @@ func CreateUser(user *models.User) error {
 }
 
 // GetUser fetches a user record from the database by ID
-func GetUser(id uint) (*models.User, error) {
+func GetUser(id string) (*models.User, error) {
 	var user models.User
-	if err := database.DB.First(&user, id).Error; err != nil {
+
+	err := database.DB.Where("id = ?", id).First(&user).Error
+	if err != nil {
 		return nil, err
 	}
 	return &user, nil
 }
 
 // GetUsers fetches all user records from the database
-func GetUsers() (*[]models.User, error) {
+func GetUsers(offset, limit int) (*[]models.User, int64, error) {
 	var users []models.User
-	if err := database.DB.Find(&users).Error; err != nil {
-		return nil, err
+	var count int64
+	if err := database.DB.Offset(offset).Limit(limit).Order("created_at DESC").Find(&users).Error; err != nil {
+		return nil, 0, err
 	}
-	return &users, nil
+
+	if err := database.DB.Model(&users).Count(&count).Error; err != nil {
+		return nil, 0, err
+	}
+
+	return &users, count, nil
 }
 
 // UpdateUser updates a user record in the database
@@ -53,11 +61,11 @@ func UserExistsByEmail(email string) (*models.User, error) {
 	if err := database.DB.Where("email = ?", email).First(&user).Error; err != nil {
 		return nil, err
 	}
-	
+
 	return &user, nil
 }
 
-func CheckUserName(name string) error{
+func CheckUserName(name string) error {
 	var user models.User
 	return database.DB.Where("username = ?", name).First(&user).Error
 }

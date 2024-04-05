@@ -1,11 +1,13 @@
 package utils
 
 import (
+	"encoding/hex"
 	"fmt"
 	"math/rand"
 	"os"
 	"strings"
 	"time"
+
 	"github.com/bimal2614/ginBoilerplate/src/crud"
 	"github.com/bimal2614/ginBoilerplate/src/models"
 	"github.com/dgrijalva/jwt-go"
@@ -43,22 +45,24 @@ func ComparePasswords(hashedPassword, password string) bool {
 }
 
 // GenerateToken generates a JWT token
-func GenerateToken(userID uint, Email string) (string, string, error) {
+func GenerateToken(userID string, Email string, Verifier string) (string, string, error) {
 	// Create a new token object with ID and Email
 	// The refresh token and Access token
 	// refresh token validation time 7 days
 	// access token validation time  24 hours
 
 	refreshTokenString := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
-		"userID": userID,
-		"Email":  Email,
-		"exp":    time.Now().Add(7 * 24 * time.Hour).Unix(),
+		"userID":   userID,
+		"Email":    Email,
+		"Verifier": Verifier,
+		"exp":      time.Now().Add(7 * 24 * time.Hour).Unix(),
 	})
 
 	accessTokenString := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
-		"userID": userID,
-		"Email":  Email,
-		"exp":    time.Now().Add(24 * time.Hour).Unix(),
+		"userID":   userID,
+		"Email":    Email,
+		"Verifier": Verifier,
+		"exp":      time.Now().Add(24 * time.Hour).Unix(),
 	})
 
 	// Sign the token with the secret
@@ -76,7 +80,6 @@ func GenerateToken(userID uint, Email string) (string, string, error) {
 
 	return refreshToken, accessToken, nil
 }
-
 
 func GetCurrentUser(tokenString string) (*models.User, error) {
 	if tokenString == "" {
@@ -97,22 +100,22 @@ func GetCurrentUser(tokenString string) (*models.User, error) {
 	}
 
 	claims, ok := token.Claims.(jwt.MapClaims)
-	id, ok:= claims["userID"].(float64)
+	id, ok := claims["userID"].(string)
 	if !ok {
-		return nil, fmt.Errorf("user ID not found in token")
+		return nil, fmt.Errorf("Could not validate credentials")
 	}
 
-	user, err := crud.GetUser(uint(id))
-	if err != nil || user.IsDeleted {
-		return nil, fmt.Errorf("User not found")
+	Key, ok := claims["Verifier"].(string)
+	if !ok {
+		return nil, fmt.Errorf("Could not validate credentials")
 	}
-	if !user.IsVerified {
-		return nil, fmt.Errorf("User not verified")
+	user, err := crud.GetUser(id)
+	if err != nil || user.IsDeleted || Key != user.Verifier || !user.IsVerified {
+		return nil, fmt.Errorf("Could not validate credentials")
 	}
 
 	return user, nil
 }
-
 
 // ExtractToken extracts the token from the Authorization header
 func ExtractToken(authorizationHeader string) string {
@@ -128,14 +131,23 @@ func GenerateOTP() string {
 	return fmt.Sprintf("%v", rand.Intn(max-min+1)+min)
 }
 
-func SendOTP(email, otp string) error {
-	// Send the OTP to the user's email
-	fmt.Println("OTP: ", otp)
-	return nil
-}
+// func SendOTP(email, otp string) error {
+// 	// Send the OTP to the user's email
+// 	fmt.Println("OTP: ", otp)
+// 	utils.SendEmail("dummy3154@gmail.com", otp, "hellobbbhbjhbv")
+// 	return nil
+// }
 
 func NormalizeEmail(email string) string {
 	// Normalize the email, convert to lowercase
 	return strings.ToLower(email)
 }
 
+func GenerateRandomKey(length int) string {
+	key := make([]byte, length)
+	_, err := rand.Read(key)
+	if err != nil {
+		return "testing-mode"
+	}
+	return hex.EncodeToString(key)
+}

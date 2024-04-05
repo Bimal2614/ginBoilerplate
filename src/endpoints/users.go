@@ -41,8 +41,8 @@ func SetupUserRoutes(router *gin.RouterGroup, dispatcher *limiter.Dispatcher) {
 	// Setup routes with dynamic rate limiting
 	userRoutes.POST("/login", dispatcher.MiddleWare(loginRateLimitPeriod, loginRateLimitRequests), userController.Login)
 	userRoutes.POST("/register", dispatcher.MiddleWare(registerRateLimitPeriod, registerRateLimitRequests), userController.Register)
-	userRoutes.POST("/verify-otp", userController.VerifyOTP)
-	userRoutes.POST("/resend-otp", userController.ReSendOTP)
+	userRoutes.POST("/user-verify-otp", userController.VerifyOTP)
+	userRoutes.POST("/send-otp", userController.SendOTP)
 	userRoutes.POST("/forgot-password", userController.ForgotPassword)
 	userRoutes.POST("/change-password", userController.ChangePassword)
 	userRoutes.GET("/get-all-users", userController.GetUsers)
@@ -51,4 +51,5 @@ func SetupUserRoutes(router *gin.RouterGroup, dispatcher *limiter.Dispatcher) {
 	userRoutes.POST("/verify-2FA-otp", userController.Verify2FAOTP)
 	userRoutes.POST("/manage-2FA", userController.Manage2FA)
 	userRoutes.POST("/verify-recover-key", userController.VerifyRecoverKey)
+	userRoutes.POST("/logout", userController.LogOut)
 }

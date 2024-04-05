@@ -1,0 +1,14 @@
+CREATE TABLE IF NOT EXISTS users (
+    id SERIAL NOT NULL PRIMARY KEY,
+    email TEXT NOT NULL UNIQUE,
+    password TEXT NOT NULL,
+    username TEXT NOT NULL UNIQUE,
+    secret_key TEXT,
+    recover_key TEXT,
+    auth2_fa BOOLEAN DEFAULT FALSE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    is_active BOOLEAN DEFAULT TRUE,
+    is_verified BOOLEAN DEFAULT FALSE,
+    is_deleted BOOLEAN DEFAULT FALSE
+);

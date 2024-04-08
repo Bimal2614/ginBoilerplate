@@ -70,6 +70,7 @@ func main() {
 	router := gin.Default()
 	router.Use(ResponseTimeMiddleware())
 	router.Use(cors.Default())
+	router.Static("/static", "static")
 
 	api := router.Group("/api")
 	{

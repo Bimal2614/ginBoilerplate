@@ -81,6 +81,15 @@ func GenerateToken(userID string, Email string, Verifier string) (string, string
 	return refreshToken, accessToken, nil
 }
 
+func CreateEmailAccessToken(email string) string {
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
+		"email": email,
+		"exp":   time.Now().Add(time.Minute * 10).Unix(),
+	})
+	signedToken, _ := token.SignedString([]byte(os.Getenv("ENCRYPTION_KEY")))
+	return signedToken
+}
+
 func GetCurrentUser(tokenString string) (*models.User, error) {
 	if tokenString == "" {
 		return nil, fmt.Errorf("authorization header missing")
@@ -117,18 +126,33 @@ func GetCurrentUser(tokenString string) (*models.User, error) {
 	return user, nil
 }
 
+func DecodeEmailAccessToken(tokenString string) (string, error) {
+	token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
+		return []byte(os.Getenv("ENCRYPTION_KEY")), nil
+	})
+	if err != nil {
+		return "", fmt.Errorf("Could not validate credentials")
+	}
+	claims, ok := token.Claims.(jwt.MapClaims)
+	if !ok || !token.Valid {
+		return "", fmt.Errorf("Could not validate credentials")
+	}
+	email := claims["email"].(string)
+	return email, nil
+}
+
 // ExtractToken extracts the token from the Authorization header
 func ExtractToken(authorizationHeader string) string {
 	// Extract the token
 	return authorizationHeader
 }
 
-func GenerateOTP() string {
+func GenerateOTP() int {
 
 	// rand.Seed(time.Now().UnixNano())
 	min := 100000
 	max := 999999
-	return fmt.Sprintf("%v", rand.Intn(max-min+1)+min)
+	return rand.Intn(max-min+1) + min
 }
 
 // func SendOTP(email, otp string) error {

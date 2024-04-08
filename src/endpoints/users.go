@@ -47,6 +47,7 @@ func SetupUserRoutes(router *gin.RouterGroup, dispatcher *limiter.Dispatcher) {
 	userRoutes.POST("/change-password", userController.ChangePassword)
 	userRoutes.GET("/get-all-users", userController.GetUsers)
 	userRoutes.GET("/profile", userController.Profile)
+	userRoutes.POST("/update-profile", userController.UpdateProfile)
 	userRoutes.GET("/get-2FA-detail", userController.Get2FADetails)
 	userRoutes.POST("/verify-2FA-otp", userController.Verify2FAOTP)
 	userRoutes.POST("/manage-2FA", userController.Manage2FA)

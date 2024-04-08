@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"image/png"
 	"net/http"
+	"os"
 	"regexp"
 	"strconv"
 	"time"
@@ -183,9 +184,19 @@ func (u *UserController) Register(c *gin.Context) {
 		return
 	}
 
-	// otp := utils.GenerateOTP()
+	//generate otp
+	otp := utils.GenerateOTP()
+
+	//generate access token for mail verify
+	access_token := utils.CreateEmailAccessToken(user.Email)
+
+	link := os.Getenv("CLIENT_URL") + "/verify-mail?" +
+		"token=" + access_token +
+		"&key=" + strconv.Itoa(int(otp)) +
+		"&type=user-verify"
+
 	// Send the OTP to the user's email
-	if err := utils.SendOTP(user.Email, 123456, "dhfgsjhrgfherghg"); err != nil {
+	if err := utils.SendOTP(user.Email, link); err != nil {
 		utils.ErrorLog.Println("Error:", "Error sending OTP!", user.Email)
 		c.JSON(http.StatusBadRequest, gin.H{"message": "Error sending OTP"})
 		return
@@ -194,7 +205,7 @@ func (u *UserController) Register(c *gin.Context) {
 	// save the otp in the database
 	emailOtp := models.EmailOtp{
 		Email:  user.Email,
-		OTP:    uint(123456), //add otp
+		OTP:    uint(otp),
 		UserID: user.ID,
 	}
 	if err := crud.CreateEmailOtp(&emailOtp); err != nil {
@@ -209,7 +220,7 @@ func (u *UserController) Register(c *gin.Context) {
 		Email:    user.Email,
 		Username: user.Username,
 	}
-	c.JSON(http.StatusOK, gin.H{"data": userSchema})
+	c.JSON(http.StatusOK, gin.H{"data": userSchema, "message": "Verify link sent to your email, please verify your email to continue"})
 }
 
 func (u *UserController) SendOTP(c *gin.Context) {
@@ -219,6 +230,10 @@ func (u *UserController) SendOTP(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"message": err.Error()})
 		return
 	}
+
+	// normalize the email
+	user.Email = utils.NormalizeEmail(user.Email)
+
 	// Check if the user exists in the database
 	userDb, err := crud.UserExistsByEmail(user.Email)
 	if err != nil {
@@ -228,9 +243,26 @@ func (u *UserController) SendOTP(c *gin.Context) {
 	}
 
 	// Generate an OTP
-	// otp := utils.GenerateOTP()
+	otp := utils.GenerateOTP()
+
+	//generate access token for mail verify
+	access_token := utils.CreateEmailAccessToken(user.Email)
+
+	//generate link for otp verify
+	var link string
+	if userDb.IsVerified {
+		link = os.Getenv("CLIENT_URL") + "/verify-mail?" +
+			"token=" + access_token +
+			"&key=" + strconv.Itoa(int(otp)) +
+			"&type=reset-password"
+	} else {
+		link = os.Getenv("CLIENT_URL") + "/verify-mail?" +
+			"token=" + access_token +
+			"&key=" + strconv.Itoa(int(otp)) +
+			"&type=user-verify"
+	}
 	// Send the OTP to the user's email
-	if err := utils.SendOTP("dumy3154@gmail.com", 123456, "sdhfgjhdgjhjh"); err != nil {
+	if err := utils.SendOTP(user.Email, link); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"message": "Error sending OTP"})
 		return
 	}
@@ -247,7 +279,7 @@ func (u *UserController) SendOTP(c *gin.Context) {
 	// If OTP doesn't exist, create a new one
 	newEmailOtp := models.EmailOtp{
 		Email:  userDb.Email,
-		OTP:    uint(123456), //add otp
+		OTP:    uint(otp),
 		UserID: userDb.ID,
 	}
 
@@ -257,7 +289,7 @@ func (u *UserController) SendOTP(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"message": "OTP sent successfully"})
+	c.JSON(http.StatusOK, gin.H{"message": "Link sent your email successfully"})
 }
 
 func (u *UserController) VerifyOTP(c *gin.Context) {
@@ -269,10 +301,12 @@ func (u *UserController) VerifyOTP(c *gin.Context) {
 		return
 	}
 
+	email, _ := utils.DecodeEmailAccessToken(request_data.EmailToken)
+
 	// Check if the user exists in the database
-	userDb, err := crud.UserExistsByEmail(request_data.Email)
+	userDb, err := crud.UserExistsByEmail(email)
 	if err != nil {
-		utils.ErrorLog.Println("Error:", "Record not found!", request_data.Email)
+		utils.ErrorLog.Println("Error:", "Record not found!", email)
 		c.JSON(http.StatusNotFound, gin.H{"message": "Record not found!"})
 		return
 	}
@@ -285,7 +319,7 @@ func (u *UserController) VerifyOTP(c *gin.Context) {
 	}
 
 	//  check is otp exists
-	emailOtp, _ := crud.OtpExistsByEmail(request_data.Email)
+	emailOtp, _ := crud.OtpExistsByEmail(email)
 	if emailOtp != nil {
 		//check is otp right or wrong
 		if emailOtp.OTP != request_data.OTP {
@@ -293,7 +327,7 @@ func (u *UserController) VerifyOTP(c *gin.Context) {
 			c.JSON(http.StatusBadRequest, gin.H{"message": "OTP mismatched, Please provide correct OTP"})
 			return
 		}
-		validityPeriod := 5 * time.Minute
+		validityPeriod := 10 * time.Minute
 		currentTime := time.Now()
 		//check otp time
 		if !emailOtp.CreatedAt.Add(validityPeriod).Before(currentTime) {
@@ -336,20 +370,23 @@ func (u *UserController) ForgotPassword(c *gin.Context) {
 		return
 	}
 
+	//decode email tekon
+	email, _ := utils.DecodeEmailAccessToken(user.EmailToken)
+
 	//  check is user exists
-	userDb, err := crud.UserExistsByEmail(user.Email)
+	userDb, err := crud.UserExistsByEmail(email)
 	if err != nil {
-		utils.ErrorLog.Println("Error:", "User not found!", user.Email)
+		utils.ErrorLog.Println("Error:", "User not found!", email)
 		c.JSON(http.StatusNotFound, gin.H{"message": "User not found!"})
 		return
 	}
 
 	//  check is otp exists
-	emailOtp, _ := crud.OtpExistsByEmail(user.Email)
+	emailOtp, _ := crud.OtpExistsByEmail(email)
 	if emailOtp != nil {
 		//check is otp right or wrong
 		if emailOtp.OTP != user.OTP {
-			utils.ErrorLog.Println("Error:", "OTP mismatched, Please provide correct OTP!", user.Email)
+			utils.ErrorLog.Println("Error:", "OTP mismatched, Please provide correct OTP!", email)
 			c.JSON(http.StatusBadRequest, gin.H{"message": "OTP mismatched, Please provide correct OTP"})
 			return
 		}
@@ -359,40 +396,40 @@ func (u *UserController) ForgotPassword(c *gin.Context) {
 		if !emailOtp.CreatedAt.Add(validityPeriod).Before(currentTime) {
 			// check for the length of the password and email structure
 			if len(user.NewPassword) < 6 {
-				utils.ErrorLog.Println("Error:", "Password must be at least 6 characters long!", user.Email)
+				utils.ErrorLog.Println("Error:", "Password must be at least 6 characters long!", email)
 				c.JSON(http.StatusBadRequest, gin.H{"message": "Password must be at least 6 characters long"})
 				return
 			}
 			// Generate a new password
 			passwordHash, err := utils.EncryptPassword(user.NewPassword)
 			if err != nil {
-				utils.ErrorLog.Println("Error:", "Error encrypting password!", user.Email)
+				utils.ErrorLog.Println("Error:", "Error encrypting password!", email)
 				c.JSON(http.StatusBadRequest, gin.H{"message": "Error encrypting password"})
 				return
 			}
 			// Update the user's password
 			userDb.Password = passwordHash
 			if err := crud.UpdateUser(userDb); err != nil {
-				utils.ErrorLog.Println("Error:", "Error updating password!", user.Email)
+				utils.ErrorLog.Println("Error:", "Error updating password!", email)
 				c.JSON(http.StatusBadRequest, gin.H{"message": "Error updating password"})
 				return
 			}
 
 			// Delete the OTP from the database
 			if err := crud.DeleteEmailOtp(emailOtp); err != nil {
-				utils.ErrorLog.Println("Error:", "Error deleting OTP!", user.Email)
+				utils.ErrorLog.Println("Error:", "Error deleting OTP!", email)
 				c.JSON(http.StatusBadRequest, gin.H{"message": "Error deleting OTP"})
 				return
 			}
 		} else {
 			// OTP has expired
-			utils.ErrorLog.Println("Error:", "OTP has expired!", user.Email)
+			utils.ErrorLog.Println("Error:", "OTP has expired!", email)
 			c.JSON(http.StatusBadRequest, gin.H{"message": "OTP has expired!"})
 			return
 		}
 	} else {
 		// User OTP not add in database
-		utils.ErrorLog.Println("Error:", "OTP not found!", user.Email)
+		utils.ErrorLog.Println("Error:", "OTP not found!", email)
 		c.JSON(http.StatusNotFound, gin.H{"message": "OTP not found!"})
 		return
 	}
@@ -479,10 +516,16 @@ func (u *UserController) GetUsers(c *gin.Context) {
 
 	var userResponses []schemas.UserResponse
 	for _, user := range *users {
+		if user.Image == "" {
+			user.Image = ""
+		} else {
+			user.Image = os.Getenv("PLATFORM_URL") + "/" + user.Image
+		}
 		userResponses = append(userResponses, schemas.UserResponse{
 			ID:         user.ID,
 			Email:      user.Email,
 			Username:   user.Username,
+			Image:      user.Image,
 			CreatedAt:  user.CreatedAt,
 			UpdatedAt:  user.UpdatedAt,
 			IsActive:   user.IsActive,
@@ -516,16 +559,73 @@ func (u *UserController) Profile(c *gin.Context) {
 		c.JSON(http.StatusUnauthorized, gin.H{"message": err.Error()})
 		return
 	}
+	var pro_url string
+	if user.Image == "" {
+		pro_url = ""
+	} else {
+		pro_url = os.Getenv("PLATFORM_URL") + "/" + user.Image
+	}
+	// pro_url := os.Getenv("PLATFORM_URL") + "/" + user.Image
 	userResponse := schemas.UserResponse{
 		ID:         user.ID,
 		Email:      user.Email,
 		Username:   user.Username,
+		Image:      pro_url,
 		CreatedAt:  user.CreatedAt,
 		UpdatedAt:  user.UpdatedAt,
 		IsActive:   user.IsActive,
 		IsVerified: user.IsVerified,
 		IsDeleted:  user.IsDeleted,
 		Auth2FA:    user.Auth2FA,
+	}
+	c.JSON(http.StatusOK, gin.H{"data": userResponse})
+}
+
+func (u *UserController) UpdateProfile(c *gin.Context) {
+	token := c.GetHeader("Authorization")
+	userDb, err := utils.GetCurrentUser(token)
+	if err != nil {
+		utils.ErrorLog.Println("Error:", err.Error())
+		c.JSON(http.StatusUnauthorized, gin.H{"message": err.Error()})
+		return
+	}
+
+	profile, err := c.FormFile("pro_dp")
+	if err != nil {
+		utils.ErrorLog.Println("Error:", err.Error(), userDb.Email)
+		c.JSON(http.StatusBadRequest, gin.H{"message": err.Error()})
+		return
+	}
+
+	// Update the user profile image
+	filepath := utils.SaveStaticFile(c, profile, userDb.ID)
+	if filepath == "" {
+		utils.ErrorLog.Println("Error:", "Profile image not getting!", userDb.Email)
+		c.JSON(http.StatusBadRequest, gin.H{"message": "Error profile image not getting"})
+		return
+	}
+
+	if userDb.Image != "" {
+		os.Remove(userDb.Image)
+	}
+	userDb.Image = filepath
+	if err := crud.UpdateUser(userDb); err != nil {
+		utils.ErrorLog.Println("Error:", "Error updating profile!", userDb.Email)
+		c.JSON(http.StatusBadRequest, gin.H{"message": "Error updating profile"})
+		return
+	}
+	pro_url := os.Getenv("PLATFORM_URL") + "/" + userDb.Image
+	userResponse := schemas.UserResponse{
+		ID:         userDb.ID,
+		Email:      userDb.Email,
+		Username:   userDb.Username,
+		Image:      pro_url,
+		CreatedAt:  userDb.CreatedAt,
+		UpdatedAt:  userDb.UpdatedAt,
+		IsActive:   userDb.IsActive,
+		IsVerified: userDb.IsVerified,
+		IsDeleted:  userDb.IsDeleted,
+		Auth2FA:    userDb.Auth2FA,
 	}
 	c.JSON(http.StatusOK, gin.H{"data": userResponse})
 }

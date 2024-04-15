@@ -17,8 +17,8 @@ type User struct {
 	SecretKey  string `json:"secret_key"`
 	RecoverKey string `json:"recover_key"`
 	Auth2FA    bool   `json:"auth2_fa" gorm:"default:false"`
-	Verifier   string `json:"verifier`
-	Provider   string `json:"provider`
+	Verifier   string `json:"verifier"`
+	Provider   string `json:"provider"`
 	Image      string `json:"image"`
 
 	CreatedAt time.Time `json:"created_at" gorm:"autoCreateTime"`

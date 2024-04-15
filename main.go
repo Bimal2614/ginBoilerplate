@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/bimal2614/ginBoilerplate/database"
+	_ "github.com/bimal2614/ginBoilerplate/docs"
 	"github.com/bimal2614/ginBoilerplate/src/endpoints"
 	"github.com/bimal2614/ginBoilerplate/src/utils"
 	limiter "github.com/davidleitw/gin-limiter"
@@ -14,6 +15,8 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/go-redis/redis/v8"
 	"github.com/joho/godotenv"
+	swaggerFiles "github.com/swaggo/files"
+	ginSwagger "github.com/swaggo/gin-swagger"
 )
 
 // ResponseTimeMiddleware logs the time taken to respond to a request.
@@ -28,11 +31,20 @@ func ResponseTimeMiddleware() gin.HandlerFunc {
 	}
 }
 
+// @title           Gin Book Service
+// @version         1.0
+// @description     A book management service API in Go using Gin framework.
+
+// @host      localhost:8000
+// @BasePath  /api/v1
+
 func main() {
 	// Load environment variables from a .env file.
 	if err := godotenv.Load(); err != nil {
 		log.Println("Warning: No .env file found. Default configurations will be used.")
 	}
+
+	utils.CreateGoogleCredFile()
 
 	// Initialize Redis client with environment variables or default values.
 	redisAddr := os.Getenv("REDIS_ADDR")
@@ -69,7 +81,14 @@ func main() {
 
 	router := gin.Default()
 	router.Use(ResponseTimeMiddleware())
-	router.Use(cors.Default())
+	// router.Use(cors.Default())
+	router.Use(cors.New(cors.Config{
+		AllowOrigins:     []string{"*"},
+		AllowMethods:     []string{"*"},
+		AllowHeaders:     []string{"Content-Type", "Content-Length", "Accept-Encoding", "Authorization", "Cache-Control"},
+		ExposeHeaders:    []string{"Content-Length"},
+		AllowCredentials: true,
+	}))
 	router.Static("/static", "static")
 
 	api := router.Group("/api")
@@ -86,9 +105,11 @@ func main() {
 
 	utils.Logger()
 
+	// url := ginSwagger.URL("http://localhost:8000/swagger/doc.json")
+	router.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
 	serverPort := os.Getenv("SERVER_PORT")
 	if serverPort == "" {
-		serverPort = ":8080" // Default port
+		serverPort = ":8000" // Default port
 	}
 	if err := router.Run(serverPort); err != nil {
 		log.Fatalf("Failed to start server: %v", err)

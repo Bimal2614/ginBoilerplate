@@ -16,7 +16,7 @@ type EmailOtp struct {
 	OTP   uint   `json:"otp"`
 
 	// User model foreign key and on delete cascade
-	UserID string `json:"user_id" gorm:"onDelete:CASCADE" gorm:"foreignKey:UserID"`
+	UserID string `json:"user_id" gorm:"onDelete:CASCADE;foreignKey:UserID"`
 
 	// CreatedAt and UpdatedAt fields
 	CreatedAt time.Time `json:"created_at" gorm:"autoCreateTime"`

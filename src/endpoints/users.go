@@ -53,4 +53,5 @@ func SetupUserRoutes(router *gin.RouterGroup, dispatcher *limiter.Dispatcher) {
 	userRoutes.POST("/manage-2FA", userController.Manage2FA)
 	userRoutes.POST("/verify-recover-key", userController.VerifyRecoverKey)
 	userRoutes.POST("/logout", userController.LogOut)
+	userRoutes.POST("/google-login", userController.GoogleLogin)
 }

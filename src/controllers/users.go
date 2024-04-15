@@ -2,6 +2,7 @@ package controllers
 
 import (
 	"bytes"
+	"context"
 	"encoding/base64"
 	"fmt"
 	"image/png"
@@ -10,6 +11,10 @@ import (
 	"regexp"
 	"strconv"
 	"time"
+
+	firebase "firebase.google.com/go"
+
+	"google.golang.org/api/option"
 
 	"github.com/bimal2614/ginBoilerplate/src/crud"
 	"github.com/bimal2614/ginBoilerplate/src/models"
@@ -28,7 +33,16 @@ func NewUserController() *UserController {
 	return &UserController{}
 }
 
-// Login function
+// Login logs in a user.
+// @Summary Logs in a user
+// @Description Logs in a user with the provided credentials
+// @Tags users
+// @Accept json
+// @Produce json
+// @Param user body schemas.UserLogInInput true "Login Request"
+// @Success 200 {string} string "Successful login"
+// @Failure 400 {string} string "failed login"
+// @Router /login [post]
 func (u *UserController) Login(c *gin.Context) {
 
 	// Get the JSON body and decode into variables
@@ -45,6 +59,12 @@ func (u *UserController) Login(c *gin.Context) {
 	if err != nil {
 		utils.ErrorLog.Println("Error:", "User not found!", user.Email)
 		c.JSON(http.StatusNotFound, gin.H{"message": "User not found!"})
+		return
+	}
+
+	if dbUser.Provider == "Google" {
+		utils.ErrorLog.Println("Error:", "Please login with google to continue!", user.Email)
+		c.JSON(http.StatusNotFound, gin.H{"message": "Please login with google to continue"})
 		return
 	}
 
@@ -251,7 +271,7 @@ func (u *UserController) SendOTP(c *gin.Context) {
 	//generate link for otp verify
 	var link string
 	if userDb.IsVerified {
-		link = os.Getenv("CLIENT_URL") + "/verify-mail?" +
+		link = os.Getenv("CLIENT_URL") + "/forget-password/change-password?" +
 			"token=" + access_token +
 			"&key=" + strconv.Itoa(int(otp)) +
 			"&type=reset-password"
@@ -301,7 +321,12 @@ func (u *UserController) VerifyOTP(c *gin.Context) {
 		return
 	}
 
-	email, _ := utils.DecodeEmailAccessToken(request_data.EmailToken)
+	email, err := utils.DecodeEmailAccessToken(request_data.EmailToken)
+	if err != nil {
+		utils.ErrorLog.Println("Error:", err.Error())
+		c.JSON(http.StatusNotFound, gin.H{"message": err.Error()})
+		return
+	}
 
 	// Check if the user exists in the database
 	userDb, err := crud.UserExistsByEmail(email)
@@ -371,7 +396,12 @@ func (u *UserController) ForgotPassword(c *gin.Context) {
 	}
 
 	//decode email tekon
-	email, _ := utils.DecodeEmailAccessToken(user.EmailToken)
+	email, err := utils.DecodeEmailAccessToken(user.EmailToken)
+	if err != nil {
+		utils.ErrorLog.Println("Error:", err.Error())
+		c.JSON(http.StatusNotFound, gin.H{"message": err.Error()})
+		return
+	}
 
 	//  check is user exists
 	userDb, err := crud.UserExistsByEmail(email)
@@ -390,7 +420,7 @@ func (u *UserController) ForgotPassword(c *gin.Context) {
 			c.JSON(http.StatusBadRequest, gin.H{"message": "OTP mismatched, Please provide correct OTP"})
 			return
 		}
-		validityPeriod := 5 * time.Minute
+		validityPeriod := 10 * time.Minute
 		currentTime := time.Now()
 		//check otp time
 		if !emailOtp.CreatedAt.Add(validityPeriod).Before(currentTime) {
@@ -590,31 +620,45 @@ func (u *UserController) UpdateProfile(c *gin.Context) {
 		return
 	}
 
-	profile, err := c.FormFile("pro_dp")
-	if err != nil {
-		utils.ErrorLog.Println("Error:", err.Error(), userDb.Email)
-		c.JSON(http.StatusBadRequest, gin.H{"message": err.Error()})
-		return
+	profile, _ := c.FormFile("pro_dp")
+	if profile != nil {
+		// Update the user profile image
+		filepath := utils.SaveStaticFile(c, profile, userDb.ID)
+		if filepath == "" {
+			utils.ErrorLog.Println("Error:", "Profile image not getting!", userDb.Email)
+			c.JSON(http.StatusBadRequest, gin.H{"message": "Error profile image not getting"})
+			return
+		}
+
+		if userDb.Image != "" {
+			os.Remove(userDb.Image)
+		}
+		userDb.Image = filepath
+	}
+	username := c.PostForm("username")
+	if username != "" {
+		// check user name unique or not
+		if err := crud.CheckUserName(username); err == nil {
+			errorMessage := fmt.Sprintf("%s username not available!", username)
+			utils.ErrorLog.Println("Error:", errorMessage, userDb.Email)
+			c.JSON(http.StatusBadRequest, gin.H{"message": errorMessage})
+			return
+		}
+		userDb.Username = username
 	}
 
-	// Update the user profile image
-	filepath := utils.SaveStaticFile(c, profile, userDb.ID)
-	if filepath == "" {
-		utils.ErrorLog.Println("Error:", "Profile image not getting!", userDb.Email)
-		c.JSON(http.StatusBadRequest, gin.H{"message": "Error profile image not getting"})
-		return
-	}
-
-	if userDb.Image != "" {
-		os.Remove(userDb.Image)
-	}
-	userDb.Image = filepath
 	if err := crud.UpdateUser(userDb); err != nil {
 		utils.ErrorLog.Println("Error:", "Error updating profile!", userDb.Email)
 		c.JSON(http.StatusBadRequest, gin.H{"message": "Error updating profile"})
 		return
 	}
-	pro_url := os.Getenv("PLATFORM_URL") + "/" + userDb.Image
+
+	var pro_url string
+	if userDb.Image == "" {
+		pro_url = ""
+	} else {
+		pro_url = os.Getenv("PLATFORM_URL") + "/" + userDb.Image
+	}
 	userResponse := schemas.UserResponse{
 		ID:         userDb.ID,
 		Email:      userDb.Email,
@@ -729,6 +773,13 @@ func (u *UserController) Verify2FAOTP(c *gin.Context) {
 		}
 
 		if authData.InsideFlag {
+			userDb.Verifier = utils.GenerateRandomKey(16)
+			if err := crud.UpdateUser(userDb); err != nil {
+				utils.ErrorLog.Println("Error:", "Error updating recover key!", userDb.Email)
+				c.JSON(http.StatusBadRequest, gin.H{"message": "Error updating verifier key"})
+				return
+			}
+
 			refreshtoken, accesstoken, err := utils.GenerateToken(userDb.ID, userDb.Email, userDb.Verifier)
 			if err != nil {
 				utils.ErrorLog.Println("Error:", "Error generating JWT token!", userDb.Email)
@@ -748,7 +799,6 @@ func (u *UserController) Verify2FAOTP(c *gin.Context) {
 			})
 			return
 		}
-
 		c.JSON(http.StatusOK, gin.H{"message": "OTP verified successfully"})
 		return
 	}
@@ -848,67 +898,87 @@ func (u *UserController) VerifyRecoverKey(c *gin.Context) {
 	}
 }
 
-// func (u *UserController) GoogleLogin(c *gin.Context) {
-//     var formData schemas.GoogleLoginInput
-//     if err := c.BindJSON(&formData); err != nil {
-//         c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request payload"})
-//         return
-//     }
+func (u *UserController) GoogleLogin(c *gin.Context) {
+	var formData schemas.GoogleLoginInput
+	if err := c.BindJSON(&formData); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request payload"})
+		return
+	}
 
-//     googleUserInfo, err := auth.VerifyIDToken(formData.IDToken)
-//     if err != nil {
-//         c.JSON(http.StatusBadRequest, gin.H{"error": "Failed to verify ID token"})
-//         return
-//     }
+	opt := option.WithCredentialsFile("google_service.json")
+	app, err := firebase.NewApp(context.Background(), nil, opt)
+	if err != nil {
+		utils.ErrorLog.Println("Error:", err.Error())
+		c.JSON(http.StatusInternalServerError, gin.H{"message": err.Error()})
+		return
+	}
 
-//     firebaseID := googleUserInfo["uid"].(string)
-//     email := googleUserInfo["email"].(string)
-//     user, err := crud.UserExistsByEmail(email)
+	client, err := app.Auth(context.Background())
+	if err != nil {
+		utils.ErrorLog.Println("Error:", err.Error())
+		c.JSON(http.StatusInternalServerError, gin.H{"message": err.Error()})
+		return
+	}
 
-//     if err != nil {
-//         // Handle error
-//         c.JSON(http.StatusInternalServerError, gin.H{"error": "Internal server error"})
-//         return
-//     }
+	// Verify Google ID token
+	token, err := client.VerifyIDToken(context.Background(), formData.IDToken)
+	if err != nil {
+		utils.ErrorLog.Println("Error:", "Failed to verify google ID token")
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Failed to verify ID token"})
+		return
+	}
 
-//     if user == nil {
-//         fullName := googleUserInfo["first_name"].(string) + " " + googleUserInfo["last_name"].(string)
-//         user = &models.User{
-//             Email:     email,
-//             Username:  fullName,
-//             // Providers: "google",
-//             // FbUID:     firebaseID,
-//         }
-//         if err := crud.CreateUser(user); err != nil {
-//             // Handle error
-//             c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create user"})
-//             return
-//         }
-//     }
+	// Extract user information from the verified token
+	email := token.Claims["email"].(string)
+	user, _ := crud.UserExistsByEmail(email)
+	verifier := utils.GenerateRandomKey(16)
 
-//     if user.Providers == nil {
-//         c.JSON(http.StatusBadRequest, gin.H{"error": "Please login using username and password"})
-//         return
-//     }
+	// If the user does not exist, create a new user
+	if user == nil {
+		user = &models.User{
+			Email:      email,
+			Username:   email,
+			Provider:   "Google",
+			IsVerified: true,
+			Verifier:   verifier,
+		}
+		if err := crud.CreateUser(user); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create user"})
+			return
+		}
+	} else if user.Provider != "Google" {
+		utils.ErrorLog.Println("Error:", "Please login using email and password", email)
+		c.JSON(http.StatusBadRequest, gin.H{"message": "Please login using email and password"})
+		return
+	} else {
+		if user.Auth2FA {
+			c.JSON(http.StatusOK, gin.H{
+				"message": "Please otp verify",
+				"data": gin.H{
+					"id":          user.ID,
+					"email":       user.Email,
+					"is_verified": user.IsVerified,
+					"auth_2fa":    user.Auth2FA,
+				},
+			})
+			return
+		}
+	}
 
-//     // Assuming you have a function createAuthTokens to generate authentication tokens
-//     tokens, err := createAuthTokens(user)
-//     if err != nil {
-//         // Handle error
-//         c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to generate authentication tokens"})
-//         return
-//     }
-
-//     // Assuming you have a function jsonifyUser to format user data
-//     refreshToken, accessToken, err := utils.GenerateToken(user)
-
-//     c.JSON(http.StatusOK, gin.H{
-//         "success": true,
-//         "data": gin.H{
-//             "ref": refreshToken,
-// 			"acc": accessToken,
-//             // "user":    userData,
-//         },
-//         "message": "Login successful",
-//     })
-// }
+	//Generate authentication tokens
+	refreshtoken, accesstoken, err := utils.GenerateToken(user.ID, user.Email, user.Verifier)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to generate authentication tokens"})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{
+		"id":          user.ID,
+		"email":       user.Email,
+		"is_verified": user.IsVerified,
+		"auth_2fa":    user.Auth2FA,
+		"token": gin.H{
+			"refreshToken": refreshtoken,
+			"accessToken":  accesstoken,
+		},
+	})
+}

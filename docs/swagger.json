@@ -1,0 +1,66 @@
+{
+    "swagger": "2.0",
+    "info": {
+        "description": "A book management service API in Go using Gin framework.",
+        "title": "Gin Book Service",
+        "contact": {},
+        "version": "1.0"
+    },
+    "host": "localhost:8000",
+    "basePath": "/api/v1",
+    "paths": {
+        "/login": {
+            "post": {
+                "description": "Logs in a user with the provided credentials",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "users"
+                ],
+                "summary": "Logs in a user",
+                "parameters": [
+                    {
+                        "description": "Login Request",
+                        "name": "user",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/schemas.UserLogInInput"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Successful login",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "400": {
+                        "description": "failed login",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                }
+            }
+        }
+    },
+    "definitions": {
+        "schemas.UserLogInInput": {
+            "type": "object",
+            "properties": {
+                "email": {
+                    "type": "string"
+                },
+                "password": {
+                    "type": "string"
+                }
+            }
+        }
+    }
+}

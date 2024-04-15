@@ -12,3 +12,6 @@
 - [ ] Websocket
 - [ ] Reddis
 - [ ] Celery
+
+# For swagger create
+- run swag init command for update swagger

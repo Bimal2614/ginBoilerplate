@@ -37,7 +37,6 @@ func ComparePasswords(hashedPassword, password string) bool {
 	// Compare the passwords
 	err := bcrypt.CompareHashAndPassword([]byte(hashedPassword), []byte(password+string(secretKey)))
 	if err != nil {
-		fmt.Println("Error comparing passwords")
 		return false
 	}
 
@@ -131,7 +130,7 @@ func DecodeEmailAccessToken(tokenString string) (string, error) {
 		return []byte(os.Getenv("ENCRYPTION_KEY")), nil
 	})
 	if err != nil {
-		return "", fmt.Errorf("Could not validate credentials")
+		return "", fmt.Errorf("Link has expired")
 	}
 	claims, ok := token.Claims.(jwt.MapClaims)
 	if !ok || !token.Valid {

@@ -1,0 +1,43 @@
+basePath: /api/v1
+definitions:
+  schemas.UserLogInInput:
+    properties:
+      email:
+        type: string
+      password:
+        type: string
+    type: object
+host: localhost:8000
+info:
+  contact: {}
+  description: A book management service API in Go using Gin framework.
+  title: Gin Book Service
+  version: "1.0"
+paths:
+  /login:
+    post:
+      consumes:
+      - application/json
+      description: Logs in a user with the provided credentials
+      parameters:
+      - description: Login Request
+        in: body
+        name: user
+        required: true
+        schema:
+          $ref: '#/definitions/schemas.UserLogInInput'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Successful login
+          schema:
+            type: string
+        "400":
+          description: failed login
+          schema:
+            type: string
+      summary: Logs in a user
+      tags:
+      - users
+swagger: "2.0"

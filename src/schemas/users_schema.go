@@ -10,6 +10,10 @@ type UserRegisterOutput struct {
 	Username string `json:"username"`
 }
 
+type UserLogInInput struct {
+	Email    string `json:"email"`
+	Password string `json:"password"`
+}
 type VerifyOTPInput struct {
 	EmailToken string `json:"email_token" binding:"required"`
 	OTP        uint   `json:"otp" binding:"required"`
@@ -31,7 +35,7 @@ type ChangePasswordInput struct {
 }
 
 type GoogleLoginInput struct {
-	IDToken string `json:"email" binding:"required"`
+	IDToken string `json:"id_token" binding:"required"`
 }
 
 type UserResponse struct {

@@ -1,0 +1,6 @@
+apps:
+    -
+        name: GinTest
+        restart_delay: 100
+        script: go run main.go
+        autorestart: true

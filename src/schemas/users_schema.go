@@ -51,6 +51,14 @@ type UserResponse struct {
 	IsDeleted  bool      `json:"is_deleted"`
 }
 
+type UserGrpcResponse struct {
+	ID         string    `json:"id"`
+	Email      string    `json:"email"`
+	Username   string    `json:"username"`
+	CreatedAt  time.Time `json:"created_at"`
+	IsVerified bool      `json:"is_verified"`
+}
+
 type AuthVerifyInput struct {
 	UserID     string `json:"user_id"`
 	SecretKey  string `json:"secret_key"`

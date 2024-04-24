@@ -1,0 +1,18 @@
+syntax = "proto3";
+
+option go_package = "github.com/bimal2614/ginBoilerplate/grpc";
+
+service UserVelidate {
+  // User validate or not
+  rpc UserToken (UserTokenRequest) returns (UserTokenResponse) {}
+}
+
+// Request message for user token
+message UserTokenRequest {
+  string token = 1;
+}
+
+message UserTokenResponse {
+  string user_data = 1;
+  bool status = 2;
+}

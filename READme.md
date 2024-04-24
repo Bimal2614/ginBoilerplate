@@ -56,3 +56,15 @@ cd
 git pull
 pm2 restart all
 ```
+
+
+# For GRPC
+- sudo snap install protobuf --classic
+- sudo apt install protobuf-compiler
+- go get -u github.com/golang/protobuf/{proto,protoc-gen-go}
+- Run nano ~/.bash_profile
+- Add export GO_PATH=~/go      export PATH=$PATH:/$GO_PATH/bin
+- Run source ~/.bash_profile
+- Run protoc --go_out=. --go_opt=paths=source_relative grpc/grpc.proto  ---> generate Go code for Protocol Buffers messages. It's typically used for defining message types and serialization/deserialization methods.
+- Run protoc --go-grpc_out=. --go-grpc_opt=paths=source_relative grpc/grpc.proto   ----> generate Go code specifically for gRPC services. It generates service interfaces and server/client stubs that enable communication between gRPC clients and servers.
+

@@ -545,17 +545,18 @@ func (u *UserController) GetUsers(c *gin.Context) {
 	}
 
 	var userResponses []schemas.UserResponse
+	var pro_url string
 	for _, user := range *users {
 		if user.Image == "" {
-			user.Image = ""
+			pro_url = ""
 		} else {
-			user.Image = os.Getenv("PLATFORM_URL") + "/" + user.Image
+			pro_url = user.Image //os.Getenv("PLATFORM_URL") + "/" + user.Image
 		}
 		userResponses = append(userResponses, schemas.UserResponse{
 			ID:         user.ID,
 			Email:      user.Email,
 			Username:   user.Username,
-			Image:      user.Image,
+			Image:      pro_url,
 			CreatedAt:  user.CreatedAt,
 			UpdatedAt:  user.UpdatedAt,
 			IsActive:   user.IsActive,
@@ -593,7 +594,7 @@ func (u *UserController) Profile(c *gin.Context) {
 	if user.Image == "" {
 		pro_url = ""
 	} else {
-		pro_url = os.Getenv("PLATFORM_URL") + "/" + user.Image
+		pro_url = user.Image //os.Getenv("PLATFORM_URL") + "/" + user.Image
 	}
 	// pro_url := os.Getenv("PLATFORM_URL") + "/" + user.Image
 	userResponse := schemas.UserResponse{
@@ -657,7 +658,7 @@ func (u *UserController) UpdateProfile(c *gin.Context) {
 	if userDb.Image == "" {
 		pro_url = ""
 	} else {
-		pro_url = os.Getenv("PLATFORM_URL") + "/" + userDb.Image
+		pro_url = userDb.Image //os.Getenv("PLATFORM_URL") + "/" + userDb.Image
 	}
 	userResponse := schemas.UserResponse{
 		ID:         userDb.ID,
@@ -671,7 +672,7 @@ func (u *UserController) UpdateProfile(c *gin.Context) {
 		IsDeleted:  userDb.IsDeleted,
 		Auth2FA:    userDb.Auth2FA,
 	}
-	c.JSON(http.StatusOK, gin.H{"data": userResponse})
+	c.JSON(http.StatusOK, gin.H{"data": userResponse, "message": "Update profile successfully"})
 }
 
 func (u *UserController) Get2FADetails(c *gin.Context) {
